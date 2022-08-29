@@ -180,6 +180,7 @@ set(OBJS
         )
 
 include_directories(
+        "${LINK_DIR}"
         "${exo_bait_dir}"
         "${CMAKE_CURRENT_SOURCE_DIR}")
 add_subdirectory(libexo)
