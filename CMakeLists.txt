@@ -185,52 +185,18 @@ include_directories(
         "${CMAKE_CURRENT_SOURCE_DIR}")
 add_subdirectory(libexo)
 
-add_executable(sim_fast
-        sim-fast.c
-        ${OBJS})
+macro(add_sim name src)
+    add_executable(${name} ${src} ${OBJS})
+    target_link_libraries(${name} libexo "${MLIBS}")
+    target_include_directories(${name} PUBLIC
+            "${CMAKE_CURRENT_SOURCE_DIR}"
+            "${LINK_DIR}")
+    add_dependencies(${name} libexo)
+endmacro()
 
-target_link_libraries(sim_fast libexo)
-target_include_directories(sim_fast PUBLIC
-        "${CMAKE_CURRENT_SOURCE_DIR}"
-        "${LINK_DIR}"
-        )
-
-add_dependencies(sim_fast libexo)
-#target_compile_options(sim_fast PUBLIC "${CFLAGS} ${MLIBS}")
-
-add_executable(sim_safe
-        sim-safe.c
-        ${OBJS})
-
-target_link_libraries(sim_safe libexo "${MLIBS}")
-target_include_directories(sim_safe PUBLIC
-        "${CMAKE_CURRENT_SOURCE_DIR}"
-        "${LINK_DIR}"
-        )
-add_dependencies(sim_safe libexo)
-
-message("Options: ${CFLAGS} ${MLIBS}")
-
-#add_library(exo)
-#
-#
-#add_library(sim_fast)
-
-
-#try_run(RRV CRV
-#        ${CMAKE_BINARY_DIR}/temp
-#        ${CMAKE_CURRENT_LIST_DIR}/sysprobe.c
-#
-#        )
-
-
-#add_library(alpha)
-
-#add_library(pisa)
-
-
-
-#target_include_directories(pisa PUBLIC
-#        ${CMAKE_CURRENT_LIST_DIR}
-#        ${LINK_PISA_DIR})
-
+add_sim(sim_fast sim-fast.c)
+add_sim(sim_safe sim-safe.c)
+add_sim(sim_profile sim-profile.c)
+add_sim(sim_cache sim-cache.c)
+add_sim(sim_bpred sim-bpred.c)
+add_sim(sim_outorder sim-outorder.c)
