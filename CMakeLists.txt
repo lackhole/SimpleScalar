@@ -104,15 +104,6 @@ macro(ss_mlibs RESULT)
     endif()
 endmacro()
 
-ss_mflags(MFLAGS)
-ss_mlibs(MLIBS)
-message("MFLAGS: ${MFLAGS}")
-message("MLIBS: ${MLIBS}")
-
-set(FFLAGS "-DDEBUG")
-set(OFLAGS "-O0 -g -Wall")
-set(CFLAGS "${MFLAGS} ${FFLAGS} ${OFLAGS} ${BINUTILS_INC} ${BINUTILS_LIB}")
-
 set(ALPHA_DIR "${CMAKE_CURRENT_LIST_DIR}/target-alpha")
 set(PISA_DIR "${CMAKE_CURRENT_LIST_DIR}/target-pisa")
 
@@ -173,6 +164,20 @@ endif()
 set(exo_bait_dir "${LINK_DIR}/compat_depth")
 file(MAKE_DIRECTORY "${exo_bait_dir}")
 
+include_directories(
+        "${exo_bait_dir}"
+        "${CMAKE_CURRENT_SOURCE_DIR}")
+
+ss_mflags(MFLAGS)
+ss_mlibs(MLIBS)
+message("MFLAGS: ${MFLAGS}")
+message("MLIBS: ${MLIBS}")
+
+set(FFLAGS "-DDEBUG")
+set(OFLAGS "-O0 -g -Wall")
+set(CFLAGS "${MFLAGS} ${FFLAGS} ${OFLAGS} ${BINUTILS_INC} ${BINUTILS_LIB}")
+add_subdirectory(libexo)
+
 set(OBJS
         main.c
         memory.c
@@ -190,11 +195,6 @@ set(OBJS
         ${LINK_DIR}/loader.c
         ${LINK_DIR}/machine.c
         )
-
-include_directories(
-        "${exo_bait_dir}"
-        "${CMAKE_CURRENT_SOURCE_DIR}")
-add_subdirectory(libexo)
 
 macro(add_sim name src)
     add_executable(${name} ${src} "${ARGN}" ${OBJS})
