@@ -2,13 +2,28 @@ cmake_minimum_required(VERSION 3.5)
 project(SimpleScalar C)
 
 option(USE_PISA "Use config-pisa" ON)
+option(USE_PISA_BIG "Use config-pisabig" OFF)
+option(USE_PISA_LITTLE "Use config-pisalit" OFF)
 option(USE_ALPHA "Use config-alpha" OFF)
 
-if (USE_PISA AND USE_ALPHA)
-    message(FATAL_ERROR "Only 1 option can be enabled")
-elseif((NOT USE_PISA) AND (NOT USE_ALPHA))
-    message(FATAL_ERROR "1 option must be enabled")
-endif()
+macro(choose_one)
+    set(_turned_on 0)
+    foreach(src ${ARGN})
+        if (${src})
+            message("${src} in ON")
+            MATH(EXPR _turned_on "${_turned_on} + 1")
+        endif()
+    endforeach()
+    message("_turned_on: ${_turned_on}")
+    if (${_turned_on} EQUAL 0)
+        message(FATAL_ERROR "1 option must be enabled from '${ARGN}'")
+    elseif(${_turned_on} GREATER 1)
+        message(FATAL_ERROR "Only 1 option can be enabled from '${ARGN}'")
+    endif()
+endmacro()
+
+choose_one(USE_PISA USE_PISA_BIG USE_PISA_LITTLE USE_ALPHA)
+
 
 if (UNIX)
 
@@ -91,71 +106,67 @@ endmacro()
 
 ss_mflags(MFLAGS)
 ss_mlibs(MLIBS)
+message("MFLAGS: ${MFLAGS}")
+message("MLIBS: ${MLIBS}")
 
 set(FFLAGS "-DDEBUG")
 set(OFLAGS "-O0 -g -Wall")
 set(CFLAGS "${MFLAGS} ${FFLAGS} ${OFLAGS} ${BINUTILS_INC} ${BINUTILS_LIB}")
-#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CFLAGS}")
-
-message("MFLAGS: ${MFLAGS}")
-message("MLIBS: ${MLIBS}")
-
 
 set(ALPHA_DIR "${CMAKE_CURRENT_LIST_DIR}/target-alpha")
 set(PISA_DIR "${CMAKE_CURRENT_LIST_DIR}/target-pisa")
 
-set(LINK_DIR                "${CMAKE_CURRENT_LIST_DIR}/generated")
-set(LINK_ALPHA_DIR          "${LINK_DIR}/alpha")
-set(LINK_PISA_DIR           "${LINK_DIR}/pisa")
-set(LINK_PISA_BIG_DIR       "${LINK_DIR}/pisa-big")
-set(LINK_PISA_LITTLE_DIR    "${LINK_DIR}/pisa-little")
+set(GENERATED_DIR           "${CMAKE_CURRENT_LIST_DIR}/generated")
+set(LINK_ALPHA_DIR          "${GENERATED_DIR}/alpha")
+set(LINK_PISA_DIR           "${GENERATED_DIR}/pisa")
+set(LINK_PISA_BIG_DIR       "${GENERATED_DIR}/pisa-big")
+set(LINK_PISA_LITTLE_DIR    "${GENERATED_DIR}/pisa-little")
 
-file(MAKE_DIRECTORY ${LINK_DIR})
-
-# Create symlinks for pisa
-file(MAKE_DIRECTORY ${LINK_PISA_DIR})
-ss_create_symlink(${PISA_DIR}/config.h  ${LINK_PISA_DIR}/config.h)
-ss_create_symlink(${PISA_DIR}/pisa.h    ${LINK_PISA_DIR}/machine.h)
-ss_create_symlink(${PISA_DIR}/pisa.c    ${LINK_PISA_DIR}/machine.c)
-ss_create_symlink(${PISA_DIR}/pisa.def  ${LINK_PISA_DIR}/machine.def)
-ss_create_symlink(${PISA_DIR}/loader.c  ${LINK_PISA_DIR}/loader.c)
-ss_create_symlink(${PISA_DIR}/symbol.c  ${LINK_PISA_DIR}/symbol.c)
-ss_create_symlink(${PISA_DIR}/syscall.c ${LINK_PISA_DIR}/syscall.c)
-
-# Create symlinks for pisa-big
-file(MAKE_DIRECTORY ${LINK_PISA_BIG_DIR})
-ss_create_symlink(${PISA_DIR}/configbig.h   ${LINK_PISA_BIG_DIR}/config.h)
-ss_create_symlink(${PISA_DIR}/pisa.h        ${LINK_PISA_BIG_DIR}/machine.h)
-ss_create_symlink(${PISA_DIR}/pisa.c        ${LINK_PISA_BIG_DIR}/machine.c)
-ss_create_symlink(${PISA_DIR}/pisa.def      ${LINK_PISA_BIG_DIR}/machine.def)
-ss_create_symlink(${PISA_DIR}/loader.c      ${LINK_PISA_BIG_DIR}/loader.c)
-ss_create_symlink(${PISA_DIR}/symbol.c      ${LINK_PISA_BIG_DIR}/symbol.c)
-ss_create_symlink(${PISA_DIR}/syscall.c     ${LINK_PISA_BIG_DIR}/syscall.c)
-
-# Create symlinks for pisa-little
-file(MAKE_DIRECTORY ${LINK_PISA_LITTLE_DIR})
-ss_create_symlink(${PISA_DIR}/configlit.h   ${LINK_PISA_LITTLE_DIR}/config.h)
-ss_create_symlink(${PISA_DIR}/pisa.h        ${LINK_PISA_LITTLE_DIR}/machine.h)
-ss_create_symlink(${PISA_DIR}/pisa.c        ${LINK_PISA_LITTLE_DIR}/machine.c)
-ss_create_symlink(${PISA_DIR}/pisa.def      ${LINK_PISA_LITTLE_DIR}/machine.def)
-ss_create_symlink(${PISA_DIR}/loader.c      ${LINK_PISA_LITTLE_DIR}/loader.c)
-ss_create_symlink(${PISA_DIR}/symbol.c      ${LINK_PISA_LITTLE_DIR}/symbol.c)
-ss_create_symlink(${PISA_DIR}/syscall.c     ${LINK_PISA_LITTLE_DIR}/syscall.c)
-
-# Create symlinks for pisa-little
-file(MAKE_DIRECTORY ${LINK_ALPHA_DIR})
-ss_create_symlink(${ALPHA_DIR}/config.h     ${LINK_ALPHA_DIR}/config.h)
-ss_create_symlink(${ALPHA_DIR}/alpha.h      ${LINK_ALPHA_DIR}/machine.h)
-ss_create_symlink(${ALPHA_DIR}/alpha.c      ${LINK_ALPHA_DIR}/machine.c)
-ss_create_symlink(${ALPHA_DIR}/alpha.def    ${LINK_ALPHA_DIR}/machine.def)
-ss_create_symlink(${ALPHA_DIR}/loader.c     ${LINK_ALPHA_DIR}/loader.c)
-ss_create_symlink(${ALPHA_DIR}/symbol.c     ${LINK_ALPHA_DIR}/symbol.c)
-ss_create_symlink(${ALPHA_DIR}/syscall.c    ${LINK_ALPHA_DIR}/syscall.c)
-
+file(MAKE_DIRECTORY ${GENERATED_DIR})
 
 if (USE_PISA)
+    # Create symlinks for pisa
+    file(MAKE_DIRECTORY ${LINK_PISA_DIR})
+    ss_create_symlink(${PISA_DIR}/config.h  ${LINK_PISA_DIR}/config.h)
+    ss_create_symlink(${PISA_DIR}/pisa.h    ${LINK_PISA_DIR}/machine.h)
+    ss_create_symlink(${PISA_DIR}/pisa.c    ${LINK_PISA_DIR}/machine.c)
+    ss_create_symlink(${PISA_DIR}/pisa.def  ${LINK_PISA_DIR}/machine.def)
+    ss_create_symlink(${PISA_DIR}/loader.c  ${LINK_PISA_DIR}/loader.c)
+    ss_create_symlink(${PISA_DIR}/symbol.c  ${LINK_PISA_DIR}/symbol.c)
+    ss_create_symlink(${PISA_DIR}/syscall.c ${LINK_PISA_DIR}/syscall.c)
     set(LINK_DIR "${LINK_PISA_DIR}")
-else()
+elseif (USE_PISA_BIG)
+    # Create symlinks for pisa-big
+    file(MAKE_DIRECTORY ${LINK_PISA_BIG_DIR})
+    ss_create_symlink(${PISA_DIR}/configbig.h   ${LINK_PISA_BIG_DIR}/config.h)
+    ss_create_symlink(${PISA_DIR}/pisa.h        ${LINK_PISA_BIG_DIR}/machine.h)
+    ss_create_symlink(${PISA_DIR}/pisa.c        ${LINK_PISA_BIG_DIR}/machine.c)
+    ss_create_symlink(${PISA_DIR}/pisa.def      ${LINK_PISA_BIG_DIR}/machine.def)
+    ss_create_symlink(${PISA_DIR}/loader.c      ${LINK_PISA_BIG_DIR}/loader.c)
+    ss_create_symlink(${PISA_DIR}/symbol.c      ${LINK_PISA_BIG_DIR}/symbol.c)
+    ss_create_symlink(${PISA_DIR}/syscall.c     ${LINK_PISA_BIG_DIR}/syscall.c)
+    set(LINK_DIR "${LINK_PISA_BIG_DIR}")
+elseif (USE_PISA_LITTLE)
+    # Create symlinks for pisa-little
+    file(MAKE_DIRECTORY ${LINK_PISA_LITTLE_DIR})
+    ss_create_symlink(${PISA_DIR}/configlit.h   ${LINK_PISA_LITTLE_DIR}/config.h)
+    ss_create_symlink(${PISA_DIR}/pisa.h        ${LINK_PISA_LITTLE_DIR}/machine.h)
+    ss_create_symlink(${PISA_DIR}/pisa.c        ${LINK_PISA_LITTLE_DIR}/machine.c)
+    ss_create_symlink(${PISA_DIR}/pisa.def      ${LINK_PISA_LITTLE_DIR}/machine.def)
+    ss_create_symlink(${PISA_DIR}/loader.c      ${LINK_PISA_LITTLE_DIR}/loader.c)
+    ss_create_symlink(${PISA_DIR}/symbol.c      ${LINK_PISA_LITTLE_DIR}/symbol.c)
+    ss_create_symlink(${PISA_DIR}/syscall.c     ${LINK_PISA_LITTLE_DIR}/syscall.c)
+    set(LINK_DIR "${LINK_PISA_LITTLE_DIR}")
+elseif (USE_ALPHA)
+    # Create symlinks for alpha
+    file(MAKE_DIRECTORY ${LINK_ALPHA_DIR})
+    ss_create_symlink(${ALPHA_DIR}/config.h     ${LINK_ALPHA_DIR}/config.h)
+    ss_create_symlink(${ALPHA_DIR}/alpha.h      ${LINK_ALPHA_DIR}/machine.h)
+    ss_create_symlink(${ALPHA_DIR}/alpha.c      ${LINK_ALPHA_DIR}/machine.c)
+    ss_create_symlink(${ALPHA_DIR}/alpha.def    ${LINK_ALPHA_DIR}/machine.def)
+    ss_create_symlink(${ALPHA_DIR}/loader.c     ${LINK_ALPHA_DIR}/loader.c)
+    ss_create_symlink(${ALPHA_DIR}/symbol.c     ${LINK_ALPHA_DIR}/symbol.c)
+    ss_create_symlink(${ALPHA_DIR}/syscall.c    ${LINK_ALPHA_DIR}/syscall.c)
     set(LINK_DIR "${LINK_ALPHA_DIR}")
 endif()
 
@@ -181,7 +192,6 @@ set(OBJS
         )
 
 include_directories(
-        "${LINK_DIR}"
         "${exo_bait_dir}"
         "${CMAKE_CURRENT_SOURCE_DIR}")
 add_subdirectory(libexo)
