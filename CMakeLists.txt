@@ -95,6 +95,7 @@ ss_mlibs(MLIBS)
 set(FFLAGS "-DDEBUG")
 set(OFLAGS "-O0 -g -Wall")
 set(CFLAGS "${MFLAGS} ${FFLAGS} ${OFLAGS} ${BINUTILS_INC} ${BINUTILS_LIB}")
+#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CFLAGS}")
 
 message("MFLAGS: ${MFLAGS}")
 message("MLIBS: ${MLIBS}")
@@ -186,7 +187,8 @@ include_directories(
 add_subdirectory(libexo)
 
 macro(add_sim name src)
-    add_executable(${name} ${src} ${OBJS})
+    add_executable(${name} ${src} "${ARGN}" ${OBJS})
+    target_compile_options(${name} PUBLIC ${CFLAGS})
     target_link_libraries(${name} libexo "${MLIBS}")
     target_include_directories(${name} PUBLIC
             "${CMAKE_CURRENT_SOURCE_DIR}"
@@ -197,6 +199,6 @@ endmacro()
 add_sim(sim_fast sim-fast.c)
 add_sim(sim_safe sim-safe.c)
 add_sim(sim_profile sim-profile.c)
-add_sim(sim_cache sim-cache.c)
-add_sim(sim_bpred sim-bpred.c)
-add_sim(sim_outorder sim-outorder.c)
+add_sim(sim_cache sim-cache.c cache.c)
+add_sim(sim_bpred sim-bpred.c bpred.c)
+add_sim(sim_outorder sim-outorder.c cache.c bpred.c resource.c ptrace.c)
