@@ -125,6 +125,7 @@ if (USE_PISA)
     ss_create_symlink(${PISA_DIR}/loader.c  ${LINK_PISA_DIR}/loader.c)
     ss_create_symlink(${PISA_DIR}/symbol.c  ${LINK_PISA_DIR}/symbol.c)
     ss_create_symlink(${PISA_DIR}/syscall.c ${LINK_PISA_DIR}/syscall.c)
+    ss_create_symlink(${CMAKE_CURRENT_LIST_DIR}/tests-pisa ${LINK_PISA_DIR}/tests)
     set(LINK_DIR "${LINK_PISA_DIR}")
 elseif (USE_PISA_BIG)
     # Create symlinks for pisa-big
@@ -136,6 +137,7 @@ elseif (USE_PISA_BIG)
     ss_create_symlink(${PISA_DIR}/loader.c      ${LINK_PISA_BIG_DIR}/loader.c)
     ss_create_symlink(${PISA_DIR}/symbol.c      ${LINK_PISA_BIG_DIR}/symbol.c)
     ss_create_symlink(${PISA_DIR}/syscall.c     ${LINK_PISA_BIG_DIR}/syscall.c)
+    ss_create_symlink(${CMAKE_CURRENT_LIST_DIR}/tests-pisa ${LINK_PISA_BIG_DIR}/tests)
     set(LINK_DIR "${LINK_PISA_BIG_DIR}")
 elseif (USE_PISA_LITTLE)
     # Create symlinks for pisa-little
@@ -147,6 +149,7 @@ elseif (USE_PISA_LITTLE)
     ss_create_symlink(${PISA_DIR}/loader.c      ${LINK_PISA_LITTLE_DIR}/loader.c)
     ss_create_symlink(${PISA_DIR}/symbol.c      ${LINK_PISA_LITTLE_DIR}/symbol.c)
     ss_create_symlink(${PISA_DIR}/syscall.c     ${LINK_PISA_LITTLE_DIR}/syscall.c)
+    ss_create_symlink(${CMAKE_CURRENT_LIST_DIR}/tests-pisa ${LINK_PISA_LITTLE_DIR}/tests)
     set(LINK_DIR "${LINK_PISA_LITTLE_DIR}")
 elseif (USE_ALPHA)
     # Create symlinks for alpha
@@ -158,6 +161,7 @@ elseif (USE_ALPHA)
     ss_create_symlink(${ALPHA_DIR}/loader.c     ${LINK_ALPHA_DIR}/loader.c)
     ss_create_symlink(${ALPHA_DIR}/symbol.c     ${LINK_ALPHA_DIR}/symbol.c)
     ss_create_symlink(${ALPHA_DIR}/syscall.c    ${LINK_ALPHA_DIR}/syscall.c)
+    ss_create_symlink(${CMAKE_CURRENT_LIST_DIR}/tests-alpha ${LINK_ALPHA_DIR}/tests)
     set(LINK_DIR "${LINK_ALPHA_DIR}")
 endif()
 
@@ -198,7 +202,8 @@ set(OBJS
 
 macro(add_sim name src)
     add_executable(${name} ${src} "${ARGN}" ${OBJS})
-    target_compile_options(${name} PUBLIC ${CFLAGS})
+    target_compile_options(${name} PUBLIC "${CFLAGS}")
+    target_compile_definitions(${name} PUBLIC ${MFLAGS} ${FFLAGS})
     target_link_libraries(${name} libexo "${MLIBS}")
     target_include_directories(${name} PUBLIC
             "${CMAKE_CURRENT_SOURCE_DIR}"
