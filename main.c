@@ -225,8 +225,7 @@ exit_now(int exit_code)
   exit(exit_code);
 }
 
-int
-main(int argc, char **argv, char **envp)
+int main(int argc, char **argv, char **envp)
 {
   char *s;
   int i, exit_code;
@@ -243,11 +242,10 @@ main(int argc, char **argv, char **envp)
   fatal_hook(sim_print_stats);
 
   /* set up a non-local exit point */
-  if ((exit_code = setjmp(sim_exit_buf)) != 0)
-    {
-      /* special handling as longjmp cannot pass 0 */
-      exit_now(exit_code-1);
-    }
+  if ((exit_code = setjmp(sim_exit_buf)) != 0) {
+    /* special handling as longjmp cannot pass 0 */
+    exit_now(exit_code-1);
+  }
 
   /* register global options */
   sim_odb = opt_new(orphan_fn);
@@ -295,60 +293,52 @@ main(int argc, char **argv, char **envp)
   opt_process_options(sim_odb, argc, argv);
 
   /* redirect I/O? */
-  if (sim_simout != NULL)
-    {
-      /* send simulator non-interactive output (STDERR) to file SIM_SIMOUT */
-      fflush(stderr);
-      if (!freopen(sim_simout, "w", stderr))
-	fatal("unable to redirect simulator output to file `%s'", sim_simout);
-    }
+  if (sim_simout != NULL) {
+    /* send simulator non-interactive output (STDERR) to file SIM_SIMOUT */
+    fflush(stderr);
+    if (!freopen(sim_simout, "w", stderr))
+	  fatal("unable to redirect simulator output to file `%s'", sim_simout);
+  }
 
-  if (sim_progout != NULL)
-    {
-      /* redirect simulated program output to file SIM_PROGOUT */
-      sim_progfd = fopen(sim_progout, "w");
-      if (!sim_progfd)
-	fatal("unable to redirect program output to file `%s'", sim_progout);
-    }
+  if (sim_progout != NULL) {
+    /* redirect simulated program output to file SIM_PROGOUT */
+    sim_progfd = fopen(sim_progout, "w");
+    if (!sim_progfd)
+      fatal("unable to redirect program output to file `%s'", sim_progout);
+  }
 
   /* need at least two argv values to run */
-  if (argc < 2)
-    {
-      banner(stderr, argc, argv);
-      usage(stderr, argc, argv);
-      exit(1);
-    }
+  if (argc < 2) {
+    banner(stderr, argc, argv);
+    usage(stderr, argc, argv);
+    exit(1);
+  }
 
   /* opening banner */
   banner(stderr, argc, argv);
 
-  if (help_me)
-    {
-      /* print help message and exit */
-      usage(stderr, argc, argv);
-      exit(1);
-    }
+  if (help_me) {
+    /* print help message and exit */
+    usage(stderr, argc, argv);
+    exit(1);
+  }
 
   /* seed the random number generator */
-  if (rand_seed == 0)
-    {
-      /* seed with the timer value, true random */
-      mysrand(time((time_t *)NULL));
-    }
-  else
-    {
-      /* seed with default or user-specified random number generator seed */
-      mysrand(rand_seed);
-    }
+  if (rand_seed == 0) {
+    /* seed with the timer value, true random */
+    mysrand(time((time_t *)NULL));
+  } else {
+    /* seed with default or user-specified random number generator seed */
+    mysrand(rand_seed);
+  }
 
   /* exec_index is set in orphan_fn() */
-  if (exec_index == -1)
-    {
-      /* executable was not found */
-      fprintf(stderr, "error: no executable specified\n");
-      usage(stderr, argc, argv);
-      exit(1);
-    }
+  if (exec_index == -1) {
+    /* executable was not found */
+    fprintf(stderr, "error: no executable specified\n");
+    usage(stderr, argc, argv);
+    exit(1);
+  }
   /* else, exec_index points to simulated program arguments */
 
   /* check simulator-specific options */
@@ -356,11 +346,10 @@ main(int argc, char **argv, char **envp)
 
 #ifndef _MSC_VER
   /* set simulator scheduling priority */
-  if (nice(0) < nice_priority)
-    {
-      if (nice(nice_priority - nice(0)) < 0)
-        fatal("could not renice simulator process");
-    }
+  if (nice(0) < nice_priority) {
+    if (nice(nice_priority - nice(0)) < 0)
+      fatal("could not renice simulator process");
+  }
 #endif
 
   /* default architected value... */
