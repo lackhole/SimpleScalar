@@ -1,10 +1,16 @@
 cmake_minimum_required(VERSION 3.5)
 project(SimpleScalar C)
 
-option(USE_PISA "Use config-pisa" ON)
+option(USE_PISA "Use config-pisa" OFF)
 option(USE_PISA_BIG "Use config-pisabig" OFF)
 option(USE_PISA_LITTLE "Use config-pisalit" OFF)
-option(USE_ALPHA "Use config-alpha" OFF)
+option(USE_ALPHA "Use config-alpha" ON)
+
+set(ENABLE_MISS_CACHE FALSE CACHE BOOL FALSE FORCE)
+
+if(ENABLE_MISS_CACHE)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DENABLE_MISS_CACHE")
+endif()
 
 macro(choose_one)
     set(_turned_on 0)
@@ -180,6 +186,8 @@ message("MLIBS: ${MLIBS}")
 set(FFLAGS "-DDEBUG")
 set(OFLAGS "-O0 -g -Wall")
 set(CFLAGS "${MFLAGS} ${FFLAGS} ${OFLAGS} ${BINUTILS_INC} ${BINUTILS_LIB}")
+message("CFLAGS: ${CFLAGS}")
+
 add_subdirectory(libexo)
 
 set(OBJS

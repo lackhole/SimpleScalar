@@ -92,6 +92,14 @@ static struct cache_t *cache_il1 = NULL;
 /* level 1 instruction cache */
 static struct cache_t *cache_il2 = NULL;
 
+/* victim cache */
+static struct cache_t* cache_il1_victim = NULL;
+
+/* miss cache */
+static struct cache_t* cache_il1_miss = NULL;
+
+static struct cache_t* cache_dl1_miss = NULL;
+
 /* level 1 data cache, entry level data cache */
 static struct cache_t *cache_dl1 = NULL;
 
@@ -128,17 +136,47 @@ dl1_access_fn(enum mem_cmd cmd,		/* access cmd, Read or Write */
 	      struct cache_blk_t *blk,	/* ptr to block in upper level */
 	      tick_t now)		/* time of access */
 {
+  if (cache_dl2) {
+    /* access next level of data cache hierarchy */
+    return cache_access(cache_dl2, cmd, baddr, NULL, bsize,
+            /* now */now, /* pudata */NULL, /* repl addr */NULL);
+  } else {
+    /* access main memory, which is always done in the main simulator loop */
+    return /* access latency, ignored */1;
+  }
+}
+
+static unsigned int
+dl1_access_fn_advanced(enum mem_cmd cmd,
+                       md_addr_t baddr,		/* block address to access */
+                       int bsize,		/* size of block to access */
+                       struct cache_blk_t *blk,	/* ptr to block in upper level */
+                       tick_t now)		/* time of access */
+{
+  if (cache_dl1_miss) {
+    return cache_access(cache_dl1_miss, cmd, baddr, NULL, bsize, now, NULL, NULL);
+  }
   if (cache_dl2)
-    {
-      /* access next level of data cache hierarchy */
-      return cache_access(cache_dl2, cmd, baddr, NULL, bsize,
-			  /* now */now, /* pudata */NULL, /* repl addr */NULL);
-    }
+  {
+    /* access next level of data cache hierarchy */
+    return cache_access(cache_dl2, cmd, baddr, NULL, bsize,
+        /* now */now, /* pudata */NULL, /* repl addr */NULL);
+  }
   else
-    {
-      /* access main memory, which is always done in the main simulator loop */
-      return /* access latency, ignored */1;
-    }
+  {
+    /* access main memory, which is always done in the main simulator loop */
+    return /* access latency, ignored */1;
+  }
+}
+
+static unsigned int
+dl1m_access_fn(enum mem_cmd cmd,
+               md_addr_t baddr,
+               int bsize,
+               struct cache_blk_t* blk,
+               tick_t now)
+{
+
 }
 
 /* l2 data cache block miss handler function */
@@ -162,17 +200,14 @@ il1_access_fn(enum mem_cmd cmd,		/* access cmd, Read or Write */
 	      struct cache_blk_t *blk,	/* ptr to block in upper level */
 	      tick_t now)		/* time of access */
 {
-  if (cache_il2)
-    {
-      /* access next level of inst cache hierarchy */
-      return cache_access(cache_il2, cmd, baddr, NULL, bsize,
-			  /* now */now, /* pudata */NULL, /* repl addr */NULL);
-    }
-  else
-    {
-      /* access main memory, which is always done in the main simulator loop */
-      return /* access latency, ignored */1;
-    }
+  if (cache_il2) {
+    /* access next level of inst cache hierarchy */
+    return cache_access(cache_il2, cmd, baddr, NULL, bsize,
+            /* now */now, /* pudata */NULL, /* repl addr */NULL);
+  } else {
+    /* access main memory, which is always done in the main simulator loop */
+    return /* access latency, ignored */1;
+  }
 }
 
 /* l2 inst cache block miss handler function */
@@ -336,128 +371,113 @@ sim_check_options(struct opt_odb_t *odb,	/* options database */
   int nsets, bsize, assoc;
 
   /* use a level 1 D-cache? */
-  if (!mystricmp(cache_dl1_opt, "none"))
-    {
-      cache_dl1 = NULL;
+  if (!mystricmp(cache_dl1_opt, "none")) {
+    cache_dl1 = NULL;
 
-      /* the level 2 D-cache cannot be defined */
-      if (strcmp(cache_dl2_opt, "none"))
-	fatal("the l1 data cache must defined if the l2 cache is defined");
+    /* the level 2 D-cache cannot be defined */
+    if (strcmp(cache_dl2_opt, "none"))
+      fatal("the l1 data cache must defined if the l2 cache is defined");
+    cache_dl2 = NULL;
+  } else { /* dl1 is defined */
+    if (sscanf(cache_dl1_opt, "%[^:]:%d:%d:%d:%c", name, &nsets, &bsize, &assoc, &c) != 5)
+      fatal("bad l1 D-cache parms: <name>:<nsets>:<bsize>:<assoc>:<repl>");
+
+#ifndef ENABLE_MISS_CACHE
+    cache_dl1 = cache_create(name, nsets, bsize, /* balloc */FALSE,
+                 /* usize */0, assoc, cache_char2policy(c),
+                 dl1_access_fn, /* hit latency */1);
+#else
+    cache_dl1 = cache_create(name, nsets, bsize, /* balloc */FALSE,
+                 /* usize */0, assoc, cache_char2policy(c),
+                 dl1_access_fn_advanced, /* hit latency */1);
+
+    cache_dl1_miss = cache_create("dl1m", 1, bsize, FALSE, 0, 4, LRU, dl1m_access_fn, 1, kCacheTypeMissCache);
+#endif
+
+    /* is the level 2 D-cache defined? */
+    if (!mystricmp(cache_dl2_opt, "none")) {
       cache_dl2 = NULL;
-    }
-  else /* dl1 is defined */
-    {
-      if (sscanf(cache_dl1_opt, "%[^:]:%d:%d:%d:%c",
-		 name, &nsets, &bsize, &assoc, &c) != 5)
-	fatal("bad l1 D-cache parms: <name>:<nsets>:<bsize>:<assoc>:<repl>");
-      cache_dl1 = cache_create(name, nsets, bsize, /* balloc */FALSE,
-			       /* usize */0, assoc, cache_char2policy(c),
-			       dl1_access_fn, /* hit latency */1);
-
-      /* is the level 2 D-cache defined? */
-      if (!mystricmp(cache_dl2_opt, "none"))
-	cache_dl2 = NULL;
-      else
-	{
-	  if (sscanf(cache_dl2_opt, "%[^:]:%d:%d:%d:%c",
-		     name, &nsets, &bsize, &assoc, &c) != 5)
-	    fatal("bad l2 D-cache parms: "
-		  "<name>:<nsets>:<bsize>:<assoc>:<repl>");
+    } else {
+	  if (sscanf(cache_dl2_opt, "%[^:]:%d:%d:%d:%c", name, &nsets, &bsize, &assoc, &c) != 5)
+	    fatal("bad l2 D-cache parms: <name>:<nsets>:<bsize>:<assoc>:<repl>");
 	  cache_dl2 = cache_create(name, nsets, bsize, /* balloc */FALSE,
 				   /* usize */0, assoc, cache_char2policy(c),
 				   dl2_access_fn, /* hit latency */1);
 	}
-    }
+  }
 
   /* use a level 1 I-cache? */
-  if (!mystricmp(cache_il1_opt, "none"))
-    {
-      cache_il1 = NULL;
+  if (!mystricmp(cache_il1_opt, "none")) {
+    cache_il1 = NULL;
+
+    /* the level 2 I-cache cannot be defined */
+    if (strcmp(cache_il2_opt, "none"))
+	  fatal("the l1 inst cache must defined if the l2 cache is defined");
+    cache_il2 = NULL;
+  } else if (!mystricmp(cache_il1_opt, "dl1")) {
+    if (!cache_dl1)
+	  fatal("I-cache l1 cannot access D-cache l1 as it's undefined");
+    cache_il1 = cache_dl1;
 
       /* the level 2 I-cache cannot be defined */
-      if (strcmp(cache_il2_opt, "none"))
-	fatal("the l1 inst cache must defined if the l2 cache is defined");
-      cache_il2 = NULL;
-    }
-  else if (!mystricmp(cache_il1_opt, "dl1"))
-    {
-      if (!cache_dl1)
-	fatal("I-cache l1 cannot access D-cache l1 as it's undefined");
-      cache_il1 = cache_dl1;
+    if (strcmp(cache_il2_opt, "none"))
+	  fatal("the l1 inst cache must defined if the l2 cache is defined");
+    cache_il2 = NULL;
+  } else if (!mystricmp(cache_il1_opt, "dl2")) {
+    if (!cache_dl2)
+	  fatal("I-cache l1 cannot access D-cache l2 as it's undefined");
+    cache_il1 = cache_dl2;
 
       /* the level 2 I-cache cannot be defined */
-      if (strcmp(cache_il2_opt, "none"))
-	fatal("the l1 inst cache must defined if the l2 cache is defined");
+    if (strcmp(cache_il2_opt, "none"))
+	  fatal("the l1 inst cache must defined if the l2 cache is defined");
+    cache_il2 = NULL;
+  } else { /* il1 is defined */
+    if (sscanf(cache_il1_opt, "%[^:]:%d:%d:%d:%c", name, &nsets, &bsize, &assoc, &c) != 5)
+	  fatal("bad l1 I-cache parms: <name>:<nsets>:<bsize>:<assoc>:<repl>");
+    cache_il1 = cache_create(name, nsets, bsize, /* balloc */FALSE,
+                 /* usize */0, assoc, cache_char2policy(c),
+                 il1_access_fn, /* hit latency */1);
+
+    /* is the level 2 D-cache defined? */
+    if (!mystricmp(cache_il2_opt, "none")) {
       cache_il2 = NULL;
-    }
-  else if (!mystricmp(cache_il1_opt, "dl2"))
-    {
+    } else if (!mystricmp(cache_il2_opt, "dl2")) {
       if (!cache_dl2)
-	fatal("I-cache l1 cannot access D-cache l2 as it's undefined");
-      cache_il1 = cache_dl2;
-
-      /* the level 2 I-cache cannot be defined */
-      if (strcmp(cache_il2_opt, "none"))
-	fatal("the l1 inst cache must defined if the l2 cache is defined");
-      cache_il2 = NULL;
+        fatal("I-cache l2 cannot access D-cache l2 as it's undefined");
+      cache_il2 = cache_dl2;
+    } else {
+      if (sscanf(cache_il2_opt, "%[^:]:%d:%d:%d:%c", name, &nsets, &bsize, &assoc, &c) != 5)
+        fatal("bad l2 I-cache parms: <name>:<nsets>:<bsize>:<assoc>:<repl>");
+      cache_il2 = cache_create(name, nsets, bsize, /* balloc */FALSE,
+                   /* usize */0, assoc, cache_char2policy(c),
+                   il2_access_fn, /* hit latency */1);
     }
-  else /* il1 is defined */
-    {
-      if (sscanf(cache_il1_opt, "%[^:]:%d:%d:%d:%c",
-		 name, &nsets, &bsize, &assoc, &c) != 5)
-	fatal("bad l1 I-cache parms: <name>:<nsets>:<bsize>:<assoc>:<repl>");
-      cache_il1 = cache_create(name, nsets, bsize, /* balloc */FALSE,
-			       /* usize */0, assoc, cache_char2policy(c),
-			       il1_access_fn, /* hit latency */1);
-
-      /* is the level 2 D-cache defined? */
-      if (!mystricmp(cache_il2_opt, "none"))
-	cache_il2 = NULL;
-      else if (!mystricmp(cache_il2_opt, "dl2"))
-	{
-	  if (!cache_dl2)
-	    fatal("I-cache l2 cannot access D-cache l2 as it's undefined");
-	  cache_il2 = cache_dl2;
-	}
-      else
-	{
-	  if (sscanf(cache_il2_opt, "%[^:]:%d:%d:%d:%c",
-		     name, &nsets, &bsize, &assoc, &c) != 5)
-	    fatal("bad l2 I-cache parms: "
-		  "<name>:<nsets>:<bsize>:<assoc>:<repl>");
-	  cache_il2 = cache_create(name, nsets, bsize, /* balloc */FALSE,
-				   /* usize */0, assoc, cache_char2policy(c),
-				   il2_access_fn, /* hit latency */1);
-	}
-    }
+  }
 
   /* use an I-TLB? */
-  if (!mystricmp(itlb_opt, "none"))
+  if (!mystricmp(itlb_opt, "none")) {
     itlb = NULL;
-  else
-    {
-      if (sscanf(itlb_opt, "%[^:]:%d:%d:%d:%c",
-		 name, &nsets, &bsize, &assoc, &c) != 5)
-	fatal("bad TLB parms: <name>:<nsets>:<page_size>:<assoc>:<repl>");
-      itlb = cache_create(name, nsets, bsize, /* balloc */FALSE,
-			  /* usize */sizeof(md_addr_t), assoc,
-			  cache_char2policy(c), itlb_access_fn,
-			  /* hit latency */1);
-    }
+  } else {
+    if (sscanf(itlb_opt, "%[^:]:%d:%d:%d:%c", name, &nsets, &bsize, &assoc, &c) != 5)
+      fatal("bad TLB parms: <name>:<nsets>:<page_size>:<assoc>:<repl>");
+    itlb = cache_create(name, nsets, bsize, /* balloc */FALSE,
+            /* usize */sizeof(md_addr_t), assoc,
+            cache_char2policy(c), itlb_access_fn,
+            /* hit latency */1);
+  }
 
   /* use a D-TLB? */
-  if (!mystricmp(dtlb_opt, "none"))
+  if (!mystricmp(dtlb_opt, "none")) {
     dtlb = NULL;
-  else
-    {
-      if (sscanf(dtlb_opt, "%[^:]:%d:%d:%d:%c",
-		 name, &nsets, &bsize, &assoc, &c) != 5)
-	fatal("bad TLB parms: <name>:<nsets>:<page_size>:<assoc>:<repl>");
-      dtlb = cache_create(name, nsets, bsize, /* balloc */FALSE,
-			  /* usize */sizeof(md_addr_t), assoc,
-			  cache_char2policy(c), dtlb_access_fn,
-			  /* hit latency */1);
-    }
+  } else {
+    if (sscanf(dtlb_opt, "%[^:]:%d:%d:%d:%c", name, &nsets, &bsize, &assoc, &c) != 5)
+      fatal("bad TLB parms: <name>:<nsets>:<page_size>:<assoc>:<repl>");
+    dtlb = cache_create(name, nsets, bsize, /* balloc */FALSE,
+            /* usize */sizeof(md_addr_t), assoc,
+            cache_char2policy(c), dtlb_access_fn,
+            /* hit latency */1);
+  }
 }
 
 /* initialize the simulator */
@@ -529,11 +549,9 @@ sim_reg_stats(struct stat_sdb_t *sdb)	/* stats database */
 		   "sim_num_insn / sim_elapsed_time", NULL);
 
   /* register cache stats */
-  if (cache_il1
-      && (cache_il1 != cache_dl1 && cache_il1 != cache_dl2))
+  if (cache_il1 && (cache_il1 != cache_dl1 && cache_il1 != cache_dl2))
     cache_reg_stats(cache_il1, sdb);
-  if (cache_il2
-      && (cache_il2 != cache_dl1 && cache_il2 != cache_dl2))
+  if (cache_il2 && (cache_il2 != cache_dl1 && cache_il2 != cache_dl2))
     cache_reg_stats(cache_il2, sdb);
   if (cache_dl1)
     cache_reg_stats(cache_dl1, sdb);
@@ -544,36 +562,34 @@ sim_reg_stats(struct stat_sdb_t *sdb)	/* stats database */
   if (dtlb)
     cache_reg_stats(dtlb, sdb);
 
-  for (i=0; i<pcstat_nelt; i++)
-    {
-      char buf[512], buf1[512];
-      struct stat_stat_t *stat;
+  for (i = 0; i < pcstat_nelt; i++) {
+    char buf[512], buf1[512];
+    struct stat_stat_t *stat;
 
-      /* track the named statistical variable by text address */
+    /* track the named statistical variable by text address */
 
-      /* find it... */
-      stat = stat_find_stat(sdb, pcstat_vars[i]);
-      if (!stat)
-	fatal("cannot locate any statistic named `%s'", pcstat_vars[i]);
+    /* find it... */
+    stat = stat_find_stat(sdb, pcstat_vars[i]);
+    if (!stat)
+      fatal("cannot locate any statistic named `%s'", pcstat_vars[i]);
 
-      /* stat must be an integral type */
-      if (stat->sc != sc_int && stat->sc != sc_uint && stat->sc != sc_counter)
-	fatal("`-pcstat' statistical variable `%s' is not an integral type",
-	      stat->name);
+    /* stat must be an integral type */
+    if (stat->sc != sc_int && stat->sc != sc_uint && stat->sc != sc_counter)
+      fatal("`-pcstat' statistical variable `%s' is not an integral type", stat->name);
 
-      /* register this stat */
-      pcstat_stats[i] = stat;
-      pcstat_lastvals[i] = STATVAL(stat);
+    /* register this stat */
+    pcstat_stats[i] = stat;
+    pcstat_lastvals[i] = STATVAL(stat);
 
-      /* declare the sparce text distribution */
-      sprintf(buf, "%s_by_pc", stat->name);
-      sprintf(buf1, "%s (by text address)", stat->desc);
-      pcstat_sdists[i] = stat_reg_sdist(sdb, buf, buf1,
-					/* initial value */0,
-					/* print fmt */(PF_COUNT|PF_PDF),
-					/* format */"0x%p %u %.2f",
-					/* print fn */NULL);
-    }
+    /* declare the sparce text distribution */
+    sprintf(buf, "%s_by_pc", stat->name);
+    sprintf(buf1, "%s (by text address)", stat->desc);
+    pcstat_sdists[i] = stat_reg_sdist(sdb, buf, buf1,
+                  /* initial value */0,
+                  /* print fmt */(PF_COUNT|PF_PDF),
+                  /* format */"0x%p %u %.2f",
+                  /* print fn */NULL);
+  }
   ld_reg_stats(sdb);
   mem_reg_stats(mem, sdb);
 }
@@ -739,95 +755,85 @@ sim_main(void)
 
   /* check for DLite debugger entry condition */
   if (dlite_check_break(regs.regs_PC, /* no access */0, /* addr */0, 0, 0))
-    dlite_main(regs.regs_PC - sizeof(md_inst_t), regs.regs_PC,
-	       sim_num_insn, &regs, mem);
+    dlite_main(regs.regs_PC - sizeof(md_inst_t), regs.regs_PC, sim_num_insn, &regs, mem);
 
-  while (TRUE)
-    {
-      /* maintain $r0 semantics */
-      regs.regs_R[MD_REG_ZERO] = 0;
+  while (TRUE) {
+    /* maintain $r0 semantics */
+    regs.regs_R[MD_REG_ZERO] = 0;
 #ifdef TARGET_ALPHA
-      regs.regs_F.d[MD_REG_ZERO] = 0.0;
+    regs.regs_F.d[MD_REG_ZERO] = 0.0;
 #endif /* TARGET_ALPHA */
 
-      /* get the next instruction to execute */
-      if (itlb)
-	cache_access(itlb, Read, IACOMPRESS(regs.regs_PC),
-		     NULL, ISCOMPRESS(sizeof(md_inst_t)), 0, NULL, NULL);
-      if (cache_il1)
-	cache_access(cache_il1, Read, IACOMPRESS(regs.regs_PC),
-		     NULL, ISCOMPRESS(sizeof(md_inst_t)), 0, NULL, NULL);
-      MD_FETCH_INST(inst, mem, regs.regs_PC);
+    /* get the next instruction to execute */
+    if (itlb)
+      cache_access(itlb, Read, IACOMPRESS(regs.regs_PC), NULL, ISCOMPRESS(sizeof(md_inst_t)), 0, NULL, NULL);
+    if (cache_il1)
+      cache_access(cache_il1, Read, IACOMPRESS(regs.regs_PC), NULL, ISCOMPRESS(sizeof(md_inst_t)), 0, NULL, NULL);
+    MD_FETCH_INST(inst, mem, regs.regs_PC);
 
-      /* keep an instruction count */
-      sim_num_insn++;
+    /* keep an instruction count */
+    sim_num_insn++;
 
-      /* set default reference address and access mode */
-      addr = 0; is_write = FALSE;
+    /* set default reference address and access mode */
+    addr = 0; is_write = FALSE;
 
-      /* set default fault - none */
-      fault = md_fault_none;
+    /* set default fault - none */
+    fault = md_fault_none;
 
-      /* decode the instruction */
-      MD_SET_OPCODE(op, inst);
+    /* decode the instruction */
+    MD_SET_OPCODE(op, inst);
 
-      /* execute the instruction */
-      switch (op)
-	{
+    /* execute the instruction */
+    switch (op) {
 #define DEFINST(OP,MSK,NAME,OPFORM,RES,FLAGS,O1,O2,I1,I2,I3)		\
-	case OP:							\
-          SYMCAT(OP,_IMPL);						\
-          break;
+      case OP:							\
+        SYMCAT(OP,_IMPL);						\
+        break;
 #define DEFLINK(OP,MSK,NAME,MASK,SHIFT)					\
-        case OP:							\
-          panic("attempted to execute a linking opcode");
+      case OP:							\
+        panic("attempted to execute a linking opcode");
 #define CONNECT(OP)
 #define DECLARE_FAULT(FAULT)						\
-	  { fault = (FAULT); break; }
+      { fault = (FAULT); break; }
 #include "machine.def"
-	default:
-          panic("attempted to execute a bogus opcode");
-	}
-
-      if (fault != md_fault_none)
-	fatal("fault (%d) detected @ 0x%08p", fault, regs.regs_PC);
-
-      if (MD_OP_FLAGS(op) & F_MEM)
-	{
-	  sim_num_refs++;
-	  if (MD_OP_FLAGS(op) & F_STORE)
-	    is_write = TRUE;
-	}
-
-      /* update any stats tracked by PC */
-      for (i=0; i < pcstat_nelt; i++)
-	{
-	  counter_t newval;
-	  int delta;
-
-	  /* check if any tracked stats changed */
-	  newval = STATVAL(pcstat_stats[i]);
-	  delta = newval - pcstat_lastvals[i];
-	  if (delta != 0)
-	    {
-	      stat_add_samples(pcstat_sdists[i], regs.regs_PC, delta);
-	      pcstat_lastvals[i] = newval;
-	    }
-
-	}
-
-      /* check for DLite debugger entry condition */
-      if (dlite_check_break(regs.regs_NPC,
-			    is_write ? ACCESS_WRITE : ACCESS_READ,
-			    addr, sim_num_insn, sim_num_insn))
-	dlite_main(regs.regs_PC, regs.regs_NPC, sim_num_insn, &regs, mem);
-
-      /* go to the next instruction */
-      regs.regs_PC = regs.regs_NPC;
-      regs.regs_NPC += sizeof(md_inst_t);
-
-      /* finish early? */
-      if (max_insts && sim_num_insn >= max_insts)
-	return;
+      default:
+        panic("attempted to execute a bogus opcode");
     }
+
+    if (fault != md_fault_none)
+      fatal("fault (%d) detected @ 0x%08p", fault, regs.regs_PC);
+
+    if (MD_OP_FLAGS(op) & F_MEM) {
+      sim_num_refs++;
+      if (MD_OP_FLAGS(op) & F_STORE)
+        is_write = TRUE;
+    }
+
+    /* update any stats tracked by PC */
+    for (i=0; i < pcstat_nelt; i++) {
+      counter_t newval;
+      int delta;
+
+      /* check if any tracked stats changed */
+      newval = STATVAL(pcstat_stats[i]);
+      delta = newval - pcstat_lastvals[i];
+      if (delta != 0) {
+        stat_add_samples(pcstat_sdists[i], regs.regs_PC, delta);
+        pcstat_lastvals[i] = newval;
+      }
+    }
+
+    /* check for DLite debugger entry condition */
+    if (dlite_check_break(regs.regs_NPC, is_write ? ACCESS_WRITE : ACCESS_READ, addr, sim_num_insn, sim_num_insn)) {
+      dlite_main(regs.regs_PC, regs.regs_NPC, sim_num_insn, &regs, mem);
+    }
+
+    /* go to the next instruction */
+    regs.regs_PC = regs.regs_NPC;
+    regs.regs_NPC += sizeof(md_inst_t);
+
+    /* finish early? */
+    if (max_insts && sim_num_insn >= max_insts)
+      return;
+  }
 }

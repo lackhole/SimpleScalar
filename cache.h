@@ -201,7 +201,7 @@ struct cache_t
 
   /* last block to hit, used to optimize cache hit processing */
   md_addr_t last_tagset;	/* tag of last line accessed */
-  struct cache_blk_t *last_blk;	/* cache block last accessed */
+  struct cache_blk_t *last_block;	/* cache block last accessed */
 
   /* data blocks */
   byte_t *data;			/* pointer to data blocks allocation */
@@ -211,21 +211,59 @@ struct cache_t
   struct cache_set_t sets[1];	/* each entry is a set */
 };
 
+enum CacheType {
+  kCacheTypeDefault = 0,
+  kCacheTypeMissCache,
+  kCacheTypeMissAndVictim,
+  kCacheTypeVictim,
+};
+
+#define SS_REPEAT(x) x
+
+#define cache_create_N8(...) SS_REPEAT(cache_create_impl(__VA_ARGS__, kCacheTypeDefault))
+#define cache_create_N9(...) SS_REPEAT(cache_create_impl(__VA_ARGS__))
+#define cache_create_N( \
+    name, nsets, bsize, balloc, \
+    usize, assoc, policy, blk_access_fn, hit_latency, \
+    cache_type, argN, ...) cache_create_N ## argN
+
+
+#define cache_create(...) \
+    SS_REPEAT(cache_create_N(__VA_ARGS__, 9, 8, unused)(__VA_ARGS__))
+
 /* create and initialize a general cache structure */
 struct cache_t *			/* pointer to cache created */
-cache_create(char *name,		/* name of the cache */
-	     int nsets,			/* total number of sets in cache */
-	     int bsize,			/* block (line) size of cache */
-	     int balloc,		/* allocate data space for blocks? */
-	     int usize,			/* size of user data to alloc w/blks */
-	     int assoc,			/* associativity of cache */
-	     enum cache_policy policy,	/* replacement policy w/in sets */
-	     /* block access function, see description w/in struct cache def */
-	     unsigned int (*blk_access_fn)(enum mem_cmd cmd,
-					   md_addr_t baddr, int bsize,
-					   struct cache_blk_t *blk,
-					   tick_t now),
-	     unsigned int hit_latency);/* latency in cycles for a hit */
+cache_create_impl(
+             char *name,		/* name of the cache */
+             int nsets,			/* total number of sets in cache */
+             int bsize,			/* block (line) size of cache */
+             int balloc,		/* allocate data space for blocks? */
+             int usize,			/* size of user data to alloc w/blks */
+             int assoc,			/* associativity of cache */
+             enum cache_policy policy,	/* replacement policy w/in sets */
+    /* block access function, see description w/in struct cache def */
+             unsigned int (*blk_access_fn)(enum mem_cmd cmd,
+                                           md_addr_t baddr, int bsize,
+                                           struct cache_blk_t *blk,
+                                           tick_t now),
+             unsigned int hit_latency,
+             int cache_type);/* latency in cycles for a hit */
+
+///* create and initialize a general cache structure */
+//struct cache_t *			/* pointer to cache created */
+//cache_create(char *name,		/* name of the cache */
+//	     int nsets,			/* total number of sets in cache */
+//	     int bsize,			/* block (line) size of cache */
+//	     int balloc,		/* allocate data space for blocks? */
+//	     int usize,			/* size of user data to alloc w/blks */
+//	     int assoc,			/* associativity of cache */
+//	     enum cache_policy policy,	/* replacement policy w/in sets */
+//	     /* block access function, see description w/in struct cache def */
+//	     unsigned int (*blk_access_fn)(enum mem_cmd cmd,
+//					   md_addr_t baddr, int bsize,
+//					   struct cache_blk_t *blk,
+//					   tick_t now),
+//	     unsigned int hit_latency);/* latency in cycles for a hit */
 
 /* parse policy */
 enum cache_policy			/* replacement policy enum */
@@ -255,7 +293,7 @@ void cache_stats(struct cache_t *cp, FILE *stream);
    cache blocks are not allocated (!CP->BALLOC), UDATA should be NULL if no
    user data is attached to blocks */
 unsigned int				/* latency of access in cycles */
-cache_access(struct cache_t *cp,	/* cache to access */
+cache_access(struct cache_t *cache,	/* cache to access */
 	     enum mem_cmd cmd,		/* access type, Read or Write */
 	     md_addr_t addr,		/* address of access */
 	     void *vp,			/* ptr to buffer for input/output */
